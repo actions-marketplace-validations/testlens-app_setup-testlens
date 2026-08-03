@@ -5,14 +5,12 @@
 
 The `setup-testlens` action connects a Maven or Gradle build to [TestLens](https://testlens.app).
 
+Thanks to the provided [typings](action-types.yml), it is possible to use this action in a type-safe way using
+https://github.com/typesafegithub/github-workflows-kt which allows writing workflow files using a type-safe Kotlin DSL.
+
 ## Prerequisites
 
-The [TestLens GitHub App](https://github.com/apps/testlens-app) needs to be installed on the repository.
-
-> [!IMPORTANT]
-> **TestLens is currently in private beta.**
-> Therefore, an extra step is required to onboard a new GitHub organization.
-> If you’re interested in trying out TestLens, please [contact us via the website](https://testlens.app/contact/).
+The [TestLens GitHub App](https://github.com/marketplace/testlens-app) needs to be installed on the repository.
 
 ## Setup for Gradle
 

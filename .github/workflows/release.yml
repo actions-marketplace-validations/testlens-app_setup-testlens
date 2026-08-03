@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      releaseVersion:
+        description: Version to be released (e.g. "1.7.2")
+        required: true
+
+permissions: {}
+
+env:
+  RELEASE_TAG: v${{ inputs.releaseVersion }}
+
+jobs:
+  release:
+    name: Create tags and GitHub release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true # required for pushing tags in subsequent steps
+      - name: Configure Git
+        run: |
+          git config user.name "testlens-bot"
+          git config user.email "testlens-bot@users.noreply.github.com"
+      - name: Create version tag
+        run: |
+          git tag --annotate --message=$RELEASE_TAG $RELEASE_TAG
+          git push origin tag $RELEASE_TAG
+      - name: Move short version tag
+        run: |
+          SHORT_TAG=${RELEASE_TAG%%.*}
+          git tag --annotate --message=SHORT_TAG --force $SHORT_TAG 
+          git push --force origin tag $SHORT_TAG
+      - name: Create GitHub release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const createGithubRelease = require('./.github/scripts/create-github-release.js');
+            const releaseTag = process.env.RELEASE_TAG;
+            createGithubRelease({ github, context, releaseTag });
