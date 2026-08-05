@@ -20,6 +20,10 @@ inputs:
   session-timeout-seconds:
     description: "The timeout (in seconds) to use when waiting for a session to be completed"
     required: false
+  working-directory:
+    description: "The directory in which to look for the Gradle/Maven build files (relative to the workspace root)"
+    required: false
+    default: ${{ github.workspace }}
 
 runs:
   using: "composite"
@@ -34,7 +38,7 @@ runs:
         WRITE_LOG_FILES: ${{ inputs.write-log-files }}
         SESSION_TIMEOUT_SECONDS: ${{ inputs.session-timeout-seconds }}
       shell: bash
-      working-directory: ${{ github.workspace }}
+      working-directory: ${{ inputs.working-directory }}
       run: |
         # Set up TestLens
 
