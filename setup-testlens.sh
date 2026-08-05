@@ -123,9 +123,8 @@ if [[ -f "pom.xml" ]]; then
   PROFILE_CONTENT="    <profile>
       <id>testlens</id>
       <activation>
-        <property>
-          <name>env.CI</name>
-        </property>
+        <!-- workaround for MNG-4917 -->
+        <file><exists>.</exists></file>
       </activation>
       <dependencies>
         <dependency>
