@@ -17,6 +17,10 @@ write_env_properties_file() {
   } > "$properties_file"
 }
 
+# Capture environment variables into a properties file in the working directory
+TESTLENS_ENV_PROPERTIES_FILE="$PWD/.testlens-env.properties"
+write_env_properties_file "$TESTLENS_ENV_PROPERTIES_FILE"
+
 # Add Gradle init script
 # Detect Gradle build based on env var, or presence the of settings script
 if [[ -n "$GRADLE_USER_HOME" ]] || [[ -f settings.gradle ]] || [[ -f settings.gradle.kts ]]; then
@@ -26,9 +30,6 @@ if [[ -n "$GRADLE_USER_HOME" ]] || [[ -f settings.gradle ]] || [[ -f settings.gr
   if [[ -z "$GRADLE_USER_HOME" ]]; then
     GRADLE_USER_HOME="$HOME/.gradle"
   fi
-
-  TESTLENS_ENV_PROPERTIES_FILE="$GRADLE_USER_HOME/init.d/testlens-env.properties"
-  write_env_properties_file "$TESTLENS_ENV_PROPERTIES_FILE"
 
   # normalize file paths on windows
   if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -115,9 +116,6 @@ fi
 # Patch Maven Parent POM
 if [[ -f "pom.xml" ]]; then
   POM_FILE="pom.xml"
-  # trailing Xs must be last for BSD/macOS mktemp; a suffix after them is not substituted
-  TESTLENS_ENV_PROPERTIES_FILE="$(mktemp "${RUNNER_TEMP:-/tmp}/testlens-env-XXXXXX")"
-  write_env_properties_file "$TESTLENS_ENV_PROPERTIES_FILE"
   # shellcheck disable=SC2016
   # SC2016: Single-quoted `${project.build.directory}` is a Maven expression, not a shell variable - it must not be expanded.
   PROFILE_CONTENT="    <profile>
