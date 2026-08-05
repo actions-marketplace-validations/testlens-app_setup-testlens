@@ -1,6 +1,22 @@
 #! /usr/bin/env bash
 set -eo pipefail
 
+escape_for_java_properties() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  printf '%s' "$value"
+}
+
+write_env_properties_file() {
+  local properties_file="$1"
+  mkdir -p "$(dirname "$properties_file")"
+  {
+    while IFS= read -r var_name; do
+      printf '%s=%s\n' "$var_name" "$(escape_for_java_properties "${!var_name}")"
+    done < <(printf '%s\n' "${!GITHUB_@}" "${!RUNNER_@}" "JOB_CHECK_RUN_ID" | sort -u)
+  } > "$properties_file"
+}
+
 # Add Gradle init script
 # Detect Gradle build based on env var, or presence the of settings script
 if [[ -n "$GRADLE_USER_HOME" ]] || [[ -f settings.gradle ]] || [[ -f settings.gradle.kts ]]; then
@@ -10,6 +26,9 @@ if [[ -n "$GRADLE_USER_HOME" ]] || [[ -f settings.gradle ]] || [[ -f settings.gr
   if [[ -z "$GRADLE_USER_HOME" ]]; then
     GRADLE_USER_HOME="$HOME/.gradle"
   fi
+
+  TESTLENS_ENV_PROPERTIES_FILE="$GRADLE_USER_HOME/init.d/testlens-env.properties"
+  write_env_properties_file "$TESTLENS_ENV_PROPERTIES_FILE"
 
   # normalize file paths on windows
   if [[ "$RUNNER_OS" == "Windows" ]]; then
@@ -26,15 +45,17 @@ if [[ -n "$GRADLE_USER_HOME" ]] || [[ -f settings.gradle ]] || [[ -f settings.gr
     GRADLE_USER_HOME_GROOVY=$(echo "$GRADLE_USER_HOME" | sed 's|^/\([a-zA-Z]\)/|\1:/|')
     # shellcheck disable=SC2001
     WORKSPACE_PATH_GROOVY=$(echo "$WORKSPACE_PATH" | sed 's|^/\([a-zA-Z]\)/|\1:/|')
+    # shellcheck disable=SC2001
+    TESTLENS_ENV_PROPERTIES_FILE_GROOVY=$(echo "$TESTLENS_ENV_PROPERTIES_FILE" | sed 's|^/\([a-zA-Z]\)/|\1:/|')
   else
     GRADLE_USER_HOME_GROOVY="$GRADLE_USER_HOME"
     WORKSPACE_PATH_GROOVY="$WORKSPACE_PATH"
+    TESTLENS_ENV_PROPERTIES_FILE_GROOVY="$TESTLENS_ENV_PROPERTIES_FILE"
   fi
 
   # write files required by TestLens
   mkdir -p "$GRADLE_USER_HOME/init.d"
   echo -n "$TESTLENS_GITHUB_TOKEN" > "$GRADLE_USER_HOME"/init.d/TESTLENS_GITHUB_TOKEN
-  echo -n "$JOB_CHECK_RUN_ID" > "$GRADLE_USER_HOME"/init.d/JOB_CHECK_RUN_ID
   cat << EOF > "$GRADLE_USER_HOME"/init.d/testlens-init.gradle
 import org.gradle.api.provider.*;
 gradle.beforeProject { project ->
@@ -46,8 +67,8 @@ gradle.beforeProject { project ->
 abstract class TestLensGitHubTokenValueSource implements ValueSource<String, ValueSourceParameters.None> {
   String obtain() { new File('$GRADLE_USER_HOME_GROOVY/init.d/TESTLENS_GITHUB_TOKEN').text }
 }
-abstract class TestLensJobCheckRunIdValueSource implements ValueSource<String, ValueSourceParameters.None> {
-  String obtain() { new File('$GRADLE_USER_HOME_GROOVY/init.d/JOB_CHECK_RUN_ID').text }
+abstract class TestLensEnvPropertiesFileValueSource implements ValueSource<String, ValueSourceParameters.None> {
+  String obtain() { '$TESTLENS_ENV_PROPERTIES_FILE_GROOVY' }
 }
 final class TestLensSetup {
   static def configure(Project project, String relativeBuildPath) {
@@ -65,7 +86,7 @@ final class TestLensSetup {
       task.environment('TESTLENS_WORK_UNIT_PATH', workUnitPath)
       task.environment('TESTLENS_MUTE_MARKER_FILE', muteMarker.absolutePath)
       task.environment('TESTLENS_GITHUB_TOKEN', providers.of(TestLensGitHubTokenValueSource){}.get())
-      task.environment('JOB_CHECK_RUN_ID', providers.of(TestLensJobCheckRunIdValueSource){}.get())
+      task.environment('TESTLENS_ENV_PROPERTIES_FILE', providers.of(TestLensEnvPropertiesFileValueSource){}.get())
       if ('true'.equalsIgnoreCase('$WRITE_LOG_FILES')) {
         task.environment('TESTLENS_LOGS_DIR', logsDir.absolutePath)
       }
@@ -94,6 +115,9 @@ fi
 # Patch Maven Parent POM
 if [[ -f "pom.xml" ]]; then
   POM_FILE="pom.xml"
+  # trailing Xs must be last for BSD/macOS mktemp; a suffix after them is not substituted
+  TESTLENS_ENV_PROPERTIES_FILE="$(mktemp "${RUNNER_TEMP:-/tmp}/testlens-env-XXXXXX")"
+  write_env_properties_file "$TESTLENS_ENV_PROPERTIES_FILE"
   # shellcheck disable=SC2016
   # SC2016: Single-quoted `${project.build.directory}` is a Maven expression, not a shell variable - it must not be expanded.
   PROFILE_CONTENT="    <profile>
@@ -120,7 +144,7 @@ if [[ -f "pom.xml" ]]; then
                 <TESTLENS_PROJECT_ID>$TESTLENS_PROJECT_ID</TESTLENS_PROJECT_ID>
                 <TESTLENS_GITHUB_TOKEN>$TESTLENS_GITHUB_TOKEN</TESTLENS_GITHUB_TOKEN>
                 <TESTLENS_WORK_UNIT_PATH>\${project.name}</TESTLENS_WORK_UNIT_PATH>
-                <JOB_CHECK_RUN_ID>$JOB_CHECK_RUN_ID</JOB_CHECK_RUN_ID>
+                <TESTLENS_ENV_PROPERTIES_FILE>$TESTLENS_ENV_PROPERTIES_FILE</TESTLENS_ENV_PROPERTIES_FILE>
                 <TESTLENS_LOGS_DIR>$(if [[ $WRITE_LOG_FILES = "true" ]]; then echo '${project.build.directory}/testlens-logs'; fi)</TESTLENS_LOGS_DIR>
                 $(if [[ -n "$SESSION_TIMEOUT_SECONDS" ]]; then echo "<TESTLENS_SESSION_TIMEOUT_SECONDS>$SESSION_TIMEOUT_SECONDS</TESTLENS_SESSION_TIMEOUT_SECONDS>"; fi)
               </environmentVariables>
@@ -133,7 +157,7 @@ if [[ -f "pom.xml" ]]; then
                 <TESTLENS_PROJECT_ID>$TESTLENS_PROJECT_ID</TESTLENS_PROJECT_ID>
                 <TESTLENS_GITHUB_TOKEN>$TESTLENS_GITHUB_TOKEN</TESTLENS_GITHUB_TOKEN>
                 <TESTLENS_WORK_UNIT_PATH>\${project.name}</TESTLENS_WORK_UNIT_PATH>
-                <JOB_CHECK_RUN_ID>$JOB_CHECK_RUN_ID</JOB_CHECK_RUN_ID>
+                <TESTLENS_ENV_PROPERTIES_FILE>$TESTLENS_ENV_PROPERTIES_FILE</TESTLENS_ENV_PROPERTIES_FILE>
                 <TESTLENS_LOGS_DIR>$(if [[ $WRITE_LOG_FILES = "true" ]]; then echo '${project.build.directory}/testlens-logs'; fi)</TESTLENS_LOGS_DIR>
                 $(if [[ -n "$SESSION_TIMEOUT_SECONDS" ]]; then echo "<TESTLENS_SESSION_TIMEOUT_SECONDS>$SESSION_TIMEOUT_SECONDS</TESTLENS_SESSION_TIMEOUT_SECONDS>"; fi)
               </environmentVariables>

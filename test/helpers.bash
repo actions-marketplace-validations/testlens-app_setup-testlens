@@ -27,6 +27,10 @@ teardown() {
   rm -rf "$TEST_TMP"
 }
 
+copy_fixture() {
+  cp -R "$FIXTURES/$1/." "$WORKDIR/"
+}
+
 assert_file() {
   [ -f "$1" ] || { echo "expected file to exist: $1"; return 1; }
 }

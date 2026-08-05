@@ -8,10 +8,6 @@ setup() {
   _common_setup
 }
 
-copy_fixture() {
-  cp -R "$FIXTURES/$1/." "$WORKDIR/"
-}
-
 @test "profile is inserted into an existing <profiles> block" {
   copy_fixture maven-with-profiles
   run "$SCRIPT"
