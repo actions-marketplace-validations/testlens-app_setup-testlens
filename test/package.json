@@ -1,0 +1,16 @@
+{
+  "name": "setup-testlens-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tooling for running tests against the setup-testlens.sh script",
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "bats --print-output-on-failure ."
+  },
+  "devDependencies": {
+    "bats": "1.13.0",
+    "bats-assert": "2.2.4",
+    "bats-support": "0.3.0",
+    "fast-xml-parser": "5.10.1"
+  }
+}
