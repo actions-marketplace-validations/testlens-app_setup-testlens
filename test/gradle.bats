@@ -13,6 +13,7 @@ setup() {
   echo "rootProject.name = 'demo'" > settings.gradle
   run "$SCRIPT"
   assert_success
+  assert_output --partial "Detected Gradle build"
   assert_file "$HOME/.gradle/init.d/testlens-init.gradle"
 }
 
@@ -33,6 +34,7 @@ setup() {
 @test "not triggered when neither settings script nor GRADLE_USER_HOME is present" {
   run "$SCRIPT"
   assert_success
+  assert_output --partial "No Gradle or Maven build detected"
   assert_no_file "$HOME/.gradle/init.d/testlens-init.gradle"
 }
 

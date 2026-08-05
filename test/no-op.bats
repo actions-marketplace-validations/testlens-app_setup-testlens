@@ -11,6 +11,7 @@ setup() {
 @test "neither Gradle nor Maven build produces no artifacts and exits 0" {
   run "$SCRIPT"
   assert_success
+  assert_output --partial "No Gradle or Maven build detected"
   assert_no_file "$HOME/.gradle"
   assert_no_file pom.xml
 }

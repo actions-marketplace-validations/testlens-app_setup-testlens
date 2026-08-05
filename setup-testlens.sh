@@ -7,6 +7,8 @@ escape_for_java_properties() {
   printf '%s' "$value"
 }
 
+DETECTED=""
+
 write_env_properties_file() {
   local properties_file="$1"
   mkdir -p "$(dirname "$properties_file")"
@@ -20,6 +22,8 @@ write_env_properties_file() {
 # Add Gradle init script
 # Detect Gradle build based on env var, or presence the of settings script
 if [[ -n "$GRADLE_USER_HOME" ]] || [[ -f settings.gradle ]] || [[ -f settings.gradle.kts ]]; then
+  echo "Detected Gradle build; setting up TestLens Gradle init script"
+  DETECTED="gradle"
 
   # set Gradle home to the default location if it was not set before, e.g. we detected the build
   # because of a settings script
@@ -95,6 +99,8 @@ fi
 
 # Patch Maven Parent POM
 if [[ -f "pom.xml" ]]; then
+  echo "Detected Maven build; patching pom.xml with TestLens profile"
+  DETECTED="${DETECTED:+$DETECTED }maven"
   POM_FILE="pom.xml"
   # Writing into .mvn also pins ${maven.multiModuleProjectDirectory} to this directory,
   # even when Maven is invoked from a subdirectory.
@@ -164,4 +170,8 @@ if [[ -f "pom.xml" ]]; then
     } > "${POM_FILE}.tmp"
     mv "${POM_FILE}.tmp" "$POM_FILE"
   fi
+fi
+
+if [[ -z "$DETECTED" ]]; then
+  echo "No Gradle or Maven build detected; TestLens setup skipped"
 fi

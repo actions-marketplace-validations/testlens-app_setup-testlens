@@ -12,6 +12,7 @@ setup() {
   copy_fixture maven-with-profiles
   run "$SCRIPT"
   assert_success
+  assert_output --partial "Detected Maven build"
   assert_contains pom.xml "<id>testlens</id>"
   assert_contains pom.xml "<id>existing</id>"
   assert_equal "$(grep -c "<profiles>" pom.xml)" 1
