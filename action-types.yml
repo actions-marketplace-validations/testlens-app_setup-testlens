@@ -11,3 +11,6 @@ inputs:
 
   session-timeout-seconds:
     type: integer
+
+  working-directory:
+    type: string
