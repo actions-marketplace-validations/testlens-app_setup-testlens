@@ -60,14 +60,6 @@ setup() {
   assert_not_contains "$init" "$WORKDIR/.gradle/testlens-env.properties"
 }
 
-@test "token file contains the raw token" {
-  export TESTLENS_GITHUB_TOKEN="some-token"
-  export GRADLE_USER_HOME="$GRADLE_HOME"
-  run "$SCRIPT"
-  assert_file "$GRADLE_HOME/init.d/TESTLENS_GITHUB_TOKEN"
-  assert_equal "$(cat "$GRADLE_HOME/init.d/TESTLENS_GITHUB_TOKEN")" "some-token"
-}
-
 @test "log-files switch is included in init script" {
   export GRADLE_USER_HOME="$GRADLE_HOME"
   export WRITE_LOG_FILES="true"
@@ -83,11 +75,10 @@ setup() {
   assert_contains "$init" "if (!'30'.empty)"
 }
 
-@test "windows backslash GRADLE_USER_HOME is converted to JVM style in the token path" {
+@test "windows backslash GRADLE_USER_HOME is normalized to forward slashes" {
   export RUNNER_OS="Windows"
-  export GRADLE_USER_HOME='C:\gradle\home'
+  export GRADLE_USER_HOME="$WORKDIR\\gradle\\home"
   run "$SCRIPT"
   assert_success
-  assert_contains "C:/gradle/home/init.d/testlens-init.gradle" \
-    "new File('C:/gradle/home/init.d/TESTLENS_GITHUB_TOKEN')"
+  assert_file "$WORKDIR/gradle/home/init.d/testlens-init.gradle"
 }

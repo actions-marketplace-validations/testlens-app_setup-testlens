@@ -11,16 +11,18 @@ setup() {
   unset "${!GITHUB_@}" "${!RUNNER_@}"
 }
 
-@test "captures GITHUB_*, RUNNER_*, and JOB_CHECK_RUN_ID variables" {
+@test "captures GITHUB_*, RUNNER_*, JOB_CHECK_RUN_ID, and TESTLENS_GITHUB_TOKEN variables" {
   echo "rootProject.name = 'demo'" > settings.gradle
   export GITHUB_REPOSITORY="octo/demo"
   export RUNNER_NAME="runner-7"
   export JOB_CHECK_RUN_ID="12345"
+  export TESTLENS_GITHUB_TOKEN="some-token"
   run "$SCRIPT"
   assert_success
   assert_contains "$GRADLE_ENV_PROPS" "GITHUB_REPOSITORY=octo/demo"
   assert_contains "$GRADLE_ENV_PROPS" "RUNNER_NAME=runner-7"
   assert_contains "$GRADLE_ENV_PROPS" "JOB_CHECK_RUN_ID=12345"
+  assert_contains "$GRADLE_ENV_PROPS" "TESTLENS_GITHUB_TOKEN=some-token"
 }
 
 @test "does not capture unrelated variables" {
