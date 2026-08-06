@@ -51,7 +51,7 @@ import org.gradle.api.provider.*;
 gradle.beforeProject { project ->
   // Locate the env properties file relative to the build root as seen at runtime
   // so it resolves whether the build runs on the runner or in a container/VM.
-  def rootDir = project.rootProject.rootDir
+  def rootDir = project.rootDir
   def envPropertiesFile = null
   for (def dir = rootDir; dir != null; dir = dir.parentFile) {
     def candidate = new File(dir, '.gradle/testlens-env.properties')
