@@ -31,7 +31,6 @@ runs:
         INSTRUMENTATION_VERSION: ${{ inputs.instrumentation-version }}
         RUNNER_OS: ${{ runner.os }}
         JOB_CHECK_RUN_ID: ${{ job.check_run_id }}
-        WORKSPACE_PATH: ${{ github.workspace }}
         WRITE_LOG_FILES: ${{ inputs.write-log-files }}
         SESSION_TIMEOUT_SECONDS: ${{ inputs.session-timeout-seconds }}
       shell: bash

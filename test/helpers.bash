@@ -17,7 +17,6 @@ _common_setup() {
   mkdir -p "$HOME"
 
   export RUNNER_OS="Linux"
-  export WORKSPACE_PATH="$WORKDIR"
 
   cd "$WORKDIR"
 }

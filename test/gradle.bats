@@ -44,13 +44,20 @@ setup() {
     "app.testlens:junit-platform-instrumentation:9.9.9"
 }
 
-@test "init script contains project id and workspace path" {
+@test "init script contains project id" {
   export TESTLENS_PROJECT_ID="octo/demo-repo"
   export GRADLE_USER_HOME="$GRADLE_HOME"
   run "$SCRIPT"
   local init="$GRADLE_HOME/init.d/testlens-init.gradle"
   assert_contains "$init" "'octo/demo-repo'"
-  assert_contains "$init" "new File('$WORKDIR')"
+}
+
+@test "init script resolves the env properties file at runtime, not a runner-absolute path" {
+  export GRADLE_USER_HOME="$GRADLE_HOME"
+  run "$SCRIPT"
+  local init="$GRADLE_HOME/init.d/testlens-init.gradle"
+  assert_contains "$init" "new File(dir, '.gradle/testlens-env.properties')"
+  assert_not_contains "$init" "$WORKDIR/.gradle/testlens-env.properties"
 }
 
 @test "token file contains the raw token" {
@@ -76,20 +83,11 @@ setup() {
   assert_contains "$init" "if (!'30'.empty)"
 }
 
-@test "windows backslash workspace path is converted to JVM style" {
-  export GRADLE_USER_HOME="$GRADLE_HOME"
+@test "windows backslash GRADLE_USER_HOME is converted to JVM style in the token path" {
   export RUNNER_OS="Windows"
-  export WORKSPACE_PATH='C:\work\repo'
+  export GRADLE_USER_HOME='C:\gradle\home'
   run "$SCRIPT"
   assert_success
-  assert_contains "$GRADLE_HOME/init.d/testlens-init.gradle" "new File('C:/work/repo')"
-}
-
-@test "git-bash style workspace path is converted to JVM style" {
-  export GRADLE_USER_HOME="$GRADLE_HOME"
-  export RUNNER_OS="Windows"
-  export WORKSPACE_PATH='/c/work/repo'
-  run "$SCRIPT"
-  assert_success
-  assert_contains "$GRADLE_HOME/init.d/testlens-init.gradle" "new File('c:/work/repo')"
+  assert_contains "C:/gradle/home/init.d/testlens-init.gradle" \
+    "new File('C:/gradle/home/init.d/TESTLENS_GITHUB_TOKEN')"
 }

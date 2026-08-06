@@ -17,10 +17,6 @@ write_env_properties_file() {
   } > "$properties_file"
 }
 
-# Capture environment variables into a properties file in the working directory
-TESTLENS_ENV_PROPERTIES_FILE="$PWD/.testlens-env.properties"
-write_env_properties_file "$TESTLENS_ENV_PROPERTIES_FILE"
-
 # Add Gradle init script
 # Detect Gradle build based on env var, or presence the of settings script
 if [[ -n "$GRADLE_USER_HOME" ]] || [[ -f settings.gradle ]] || [[ -f settings.gradle.kts ]]; then
@@ -36,43 +32,41 @@ if [[ -n "$GRADLE_USER_HOME" ]] || [[ -f settings.gradle ]] || [[ -f settings.gr
     # shellcheck disable=SC2001
     # SC2001: sed is intentionally used here over bash parameter expansion for readability,
     # as the bash equivalent `${VAR//\\//}` is visually ambiguous for backslash-to-slash substitution.
-    WORKSPACE_PATH=$(echo "$WORKSPACE_PATH" | sed 's|\\|/|g')
-    # shellcheck disable=SC2001
     GRADLE_USER_HOME=$(echo "$GRADLE_USER_HOME" | sed 's|\\|/|g')
     # When running in a shell script (as opposed to inline action YAML), bash on Windows
     # normalizes paths to Git Bash style (/c/Users/...). The Groovy init script however
     # runs on the JVM which requires Windows style paths (C:/Users/...).
     # shellcheck disable=SC2001
     GRADLE_USER_HOME_GROOVY=$(echo "$GRADLE_USER_HOME" | sed 's|^/\([a-zA-Z]\)/|\1:/|')
-    # shellcheck disable=SC2001
-    WORKSPACE_PATH_GROOVY=$(echo "$WORKSPACE_PATH" | sed 's|^/\([a-zA-Z]\)/|\1:/|')
-    # shellcheck disable=SC2001
-    TESTLENS_ENV_PROPERTIES_FILE_GROOVY=$(echo "$TESTLENS_ENV_PROPERTIES_FILE" | sed 's|^/\([a-zA-Z]\)/|\1:/|')
   else
     GRADLE_USER_HOME_GROOVY="$GRADLE_USER_HOME"
-    WORKSPACE_PATH_GROOVY="$WORKSPACE_PATH"
-    TESTLENS_ENV_PROPERTIES_FILE_GROOVY="$TESTLENS_ENV_PROPERTIES_FILE"
   fi
 
   # write files required by TestLens
+  write_env_properties_file "$PWD/.gradle/testlens-env.properties"
   mkdir -p "$GRADLE_USER_HOME/init.d"
   echo -n "$TESTLENS_GITHUB_TOKEN" > "$GRADLE_USER_HOME"/init.d/TESTLENS_GITHUB_TOKEN
   cat << EOF > "$GRADLE_USER_HOME"/init.d/testlens-init.gradle
 import org.gradle.api.provider.*;
 gradle.beforeProject { project ->
-  String relativeBuildPath = new File('$WORKSPACE_PATH_GROOVY').relativePath(project.rootDir)
-  if (!relativeBuildPath.startsWith('..') && !new File(relativeBuildPath).isAbsolute()) {
-    TestLensSetup.configure(project, relativeBuildPath)
+  // Locate the env properties file relative to the build root as seen at runtime
+  // so it resolves whether the build runs on the runner or in a container/VM.
+  def rootDir = project.rootProject.rootDir
+  def envPropertiesFile = null
+  for (def dir = rootDir; dir != null; dir = dir.parentFile) {
+    def candidate = new File(dir, '.gradle/testlens-env.properties')
+    if (candidate.isFile()) { envPropertiesFile = candidate; break }
+  }
+  if (envPropertiesFile != null) {
+    def relativeBuildPath = envPropertiesFile.parentFile.parentFile.relativePath(rootDir)
+    TestLensSetup.configure(project, relativeBuildPath, envPropertiesFile)
   }
 }
 abstract class TestLensGitHubTokenValueSource implements ValueSource<String, ValueSourceParameters.None> {
   String obtain() { new File('$GRADLE_USER_HOME_GROOVY/init.d/TESTLENS_GITHUB_TOKEN').text }
 }
-abstract class TestLensEnvPropertiesFileValueSource implements ValueSource<String, ValueSourceParameters.None> {
-  String obtain() { '$TESTLENS_ENV_PROPERTIES_FILE_GROOVY' }
-}
 final class TestLensSetup {
-  static def configure(Project project, String relativeBuildPath) {
+  static def configure(Project project, String relativeBuildPath, File envPropertiesFile) {
     project.plugins.withId('java') {
       project.testing.suites.configureEach {
         dependencies { runtimeOnly('app.testlens:junit-platform-instrumentation:$INSTRUMENTATION_VERSION') }
@@ -87,7 +81,7 @@ final class TestLensSetup {
       task.environment('TESTLENS_WORK_UNIT_PATH', workUnitPath)
       task.environment('TESTLENS_MUTE_MARKER_FILE', muteMarker.absolutePath)
       task.environment('TESTLENS_GITHUB_TOKEN', providers.of(TestLensGitHubTokenValueSource){}.get())
-      task.environment('TESTLENS_ENV_PROPERTIES_FILE', providers.of(TestLensEnvPropertiesFileValueSource){}.get())
+      task.environment('TESTLENS_ENV_PROPERTIES_FILE', envPropertiesFile.absolutePath)
       if ('true'.equalsIgnoreCase('$WRITE_LOG_FILES')) {
         task.environment('TESTLENS_LOGS_DIR', logsDir.absolutePath)
       }
@@ -116,6 +110,9 @@ fi
 # Patch Maven Parent POM
 if [[ -f "pom.xml" ]]; then
   POM_FILE="pom.xml"
+  # Writing into .mvn also pins ${maven.multiModuleProjectDirectory} to this directory,
+  # even when Maven is invoked from a subdirectory.
+  write_env_properties_file "$PWD/.mvn/testlens-env.properties"
   # shellcheck disable=SC2016
   # SC2016: Single-quoted `${project.build.directory}` is a Maven expression, not a shell variable - it must not be expanded.
   PROFILE_CONTENT="    <profile>
@@ -141,7 +138,7 @@ if [[ -f "pom.xml" ]]; then
                 <TESTLENS_PROJECT_ID>$TESTLENS_PROJECT_ID</TESTLENS_PROJECT_ID>
                 <TESTLENS_GITHUB_TOKEN>$TESTLENS_GITHUB_TOKEN</TESTLENS_GITHUB_TOKEN>
                 <TESTLENS_WORK_UNIT_PATH>\${project.name}</TESTLENS_WORK_UNIT_PATH>
-                <TESTLENS_ENV_PROPERTIES_FILE>$TESTLENS_ENV_PROPERTIES_FILE</TESTLENS_ENV_PROPERTIES_FILE>
+                <TESTLENS_ENV_PROPERTIES_FILE>\${maven.multiModuleProjectDirectory}/.mvn/testlens-env.properties</TESTLENS_ENV_PROPERTIES_FILE>
                 <TESTLENS_LOGS_DIR>$(if [[ $WRITE_LOG_FILES = "true" ]]; then echo '${project.build.directory}/testlens-logs'; fi)</TESTLENS_LOGS_DIR>
                 $(if [[ -n "$SESSION_TIMEOUT_SECONDS" ]]; then echo "<TESTLENS_SESSION_TIMEOUT_SECONDS>$SESSION_TIMEOUT_SECONDS</TESTLENS_SESSION_TIMEOUT_SECONDS>"; fi)
               </environmentVariables>
@@ -154,7 +151,7 @@ if [[ -f "pom.xml" ]]; then
                 <TESTLENS_PROJECT_ID>$TESTLENS_PROJECT_ID</TESTLENS_PROJECT_ID>
                 <TESTLENS_GITHUB_TOKEN>$TESTLENS_GITHUB_TOKEN</TESTLENS_GITHUB_TOKEN>
                 <TESTLENS_WORK_UNIT_PATH>\${project.name}</TESTLENS_WORK_UNIT_PATH>
-                <TESTLENS_ENV_PROPERTIES_FILE>$TESTLENS_ENV_PROPERTIES_FILE</TESTLENS_ENV_PROPERTIES_FILE>
+                <TESTLENS_ENV_PROPERTIES_FILE>\${maven.multiModuleProjectDirectory}/.mvn/testlens-env.properties</TESTLENS_ENV_PROPERTIES_FILE>
                 <TESTLENS_LOGS_DIR>$(if [[ $WRITE_LOG_FILES = "true" ]]; then echo '${project.build.directory}/testlens-logs'; fi)</TESTLENS_LOGS_DIR>
                 $(if [[ -n "$SESSION_TIMEOUT_SECONDS" ]]; then echo "<TESTLENS_SESSION_TIMEOUT_SECONDS>$SESSION_TIMEOUT_SECONDS</TESTLENS_SESSION_TIMEOUT_SECONDS>"; fi)
               </environmentVariables>
